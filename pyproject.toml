@@ -1,0 +1,51 @@
+[project]
+name = "transcribe-service"
+version = "0.1.0"
+description = "A bounded, asynchronous media transcription service"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "pydantic-settings>=2.8,<3",
+  "psycopg[binary]>=3.2,<4",
+  "sqlalchemy>=2.0,<2.1",
+  "celery>=5.5,<6",
+  "faster-whisper>=1.1,<2",
+  "numpy>=2,<3",
+  # Whisper downloads use HTTPX exceptions in Hub 1.x; worker retries rely on them.
+  "huggingface-hub>=1,<2",
+  "httpx>=0.28,<1",
+  "ffmpegio>=0.12,<0.13",
+  "python-json-logger>=4,<5",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19,<2",
+    "ruff>=0.11,<1",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["main.py", "src", "scripts"]
+plugins = ["pydantic.mypy"]
+check_untyped_defs = true
+warn_unused_ignores = true
+
+# These installed libraries do not ship type declarations.
+[[tool.mypy.overrides]]
+module = ["celery.*", "kombu.*", "faster_whisper.*", "ffmpegio.*"]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_typed = true

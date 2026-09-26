@@ -1,0 +1,106 @@
+name: transcribe-service
+
+x-app: &app
+  build: .
+  image: transcribe-service:local
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://${POSTGRES_USER:-transcriber}:${POSTGRES_PASSWORD:-local-development}@db:5432/${POSTGRES_DB:-transcriber}
+    BROKER_URL: amqp://${RABBITMQ_USER:-transcriber}:${RABBITMQ_PASSWORD:-local-development}@rabbitmq:5672//
+    MEDIA_DIR: /data
+    MODEL_CACHE_DIR: /models
+    SERVER_HOST: 0.0.0.0
+  volumes:
+    - media:/data
+    - models:/models
+  init: true
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-transcriber}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development}
+      POSTGRES_DB: ${POSTGRES_DB:-transcriber}
+    ports: ["127.0.0.1:${DB_PORT:-55432}:5432"]
+    volumes: ["postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4-alpine@sha256:2531fe16e1cb4ec4086d3eaa63118c8f074dd98620d55f022f453a397b18f037
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-transcriber}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-local-development}
+    ports: ["127.0.0.1:${BROKER_PORT:-5673}:5672"]
+    volumes: ["rabbitmq:/var/lib/rabbitmq"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  schema:
+    <<: *app
+    command: ["python", "-m", "src.database"]
+    restart: "no"
+    depends_on:
+      db: { condition: service_healthy }
+
+  api:
+    <<: *app
+    command: ["python", "main.py"]
+    ports: ["127.0.0.1:${APP_PORT:-8000}:${SERVER_PORT:-8000}"]
+    mem_limit: ${API_MEMORY_LIMIT:-512m}
+    depends_on:
+      schema: { condition: service_completed_successfully }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; from src.settings.config import get_settings; urllib.request.urlopen(f'http://127.0.0.1:{get_settings().server_port}/health/ready')",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    <<: *app
+    command:
+      [
+        "celery",
+        "-A",
+        "src.settings.celery_app:celery_app",
+        "worker",
+        "--loglevel=${LOG_LEVEL:-INFO}",
+        "--without-mingle",
+        "--without-gossip",
+      ]
+    mem_limit: ${WORKER_MEMORY_LIMIT:-4g}
+    cpus: ${WORKER_CPU_LIMIT:-4}
+    stop_grace_period: ${WORKER_STOP_GRACE:-930s}
+    depends_on:
+      schema: { condition: service_completed_successfully }
+      rabbitmq: { condition: service_healthy }
+
+  maintenance:
+    <<: *app
+    command: ["python", "-m", "src.transcription.maintenance"]
+    mem_limit: ${MAINTENANCE_MEMORY_LIMIT:-256m}
+    depends_on:
+      schema: { condition: service_completed_successfully }
+      rabbitmq: { condition: service_healthy }
+
+volumes:
+  postgres:
+  rabbitmq:
+  media:
+  models:

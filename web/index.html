@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Transcribe Service</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">Transcribe Service</p>
+        <h1>From sound to sentences.</h1>
+        <p class="muted">Drop in a file or record a thought. Get words you can work with.</p>
+      </header>
+      <div class="workspace">
+        <section aria-label="Recording" class="input-panel">
+          <div class="input-modes" role="group" aria-label="Choose input method">
+            <button
+              id="upload-mode"
+              class="active"
+              type="button"
+              aria-pressed="true"
+            >
+              Upload a file
+            </button>
+            <button id="record-mode" type="button" aria-pressed="false">
+              Record audio
+            </button>
+          </div>
+          <div id="upload-area">
+            <label id="dropzone" class="dropzone" for="file-input">
+              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5" />
+              </svg>
+              <strong>A little audio. A lot less typing.</strong>
+              <span>Drop an audio or video file here, or browse below.</span>
+              <input
+                id="file-input"
+                type="file"
+                accept="audio/*,video/*"
+                aria-label="Choose an audio or video file"
+              />
+            </label>
+          </div>
+          <div id="record-area" class="record-area" hidden>
+            <div class="sound-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+            <strong id="record-time">00:00</strong>
+            <button id="record-button" type="button">Start recording</button>
+            <p id="record-help" class="muted">
+              Microphone permission is needed to record.
+            </p>
+          </div>
+          <div id="selection" class="selection" hidden>
+            <div>
+              <strong id="file-name" dir="auto"></strong
+              ><small id="file-size"></small>
+            </div>
+            <button
+              id="clear-file"
+              type="button"
+              aria-label="Remove selected recording"
+            >
+              Remove
+            </button>
+          </div>
+          <audio
+            id="preview"
+            controls
+            hidden
+            aria-label="Recording preview"
+          ></audio>
+          <p id="limits" class="muted">Loading upload limits...</p>
+          <button id="submit" class="primary" type="button" disabled>
+            Transcribe recording
+          </button>
+          <p id="retention" class="muted small">
+            Files and results expire automatically.
+          </p>
+        </section>
+        <section aria-label="Transcription result" class="result-panel">
+          <div class="result-heading">
+            <h2>Transcript</h2>
+            <span id="status-badge" class="badge">Ready when you are</span>
+          </div>
+          <div id="empty-state" class="empty-state">
+            <span class="empty-mark" aria-hidden="true">“</span>
+            <h3>Your words, in writing.</h3>
+            <p class="muted">Add a recording and hit transcribe.<br />Your text will appear right here.</p>
+          </div>
+          <div id="job-state" hidden>
+            <div class="job-meta">
+              <span id="job-filename" dir="auto"></span><span id="elapsed"></span>
+            </div>
+            <ol id="job-steps" class="job-steps" aria-label="Transcription stages">
+              <li id="step-uploading">Upload</li>
+              <li id="step-queued">Queued</li>
+              <li id="step-processing">Transcribe</li>
+              <li id="step-succeeded">Ready</li>
+            </ol>
+            <p id="status-message" role="status" aria-live="polite"></p>
+            <progress
+              id="activity"
+              max="100"
+              aria-label="Transcription in progress"
+              hidden
+            ></progress>
+            <div
+              id="transcript"
+              class="transcript"
+              dir="auto"
+              tabindex="0"
+              aria-label="Transcript"
+              hidden
+            ></div>
+            <div id="result-actions" class="result-actions" hidden>
+              <button id="copy" type="button">Copy text</button>
+              <button id="download" type="button">Download .txt</button>
+              <span id="language" class="muted small"></span>
+            </div>
+          </div>
+        </section>
+      </div>
+      <p id="error" class="error" role="alert" hidden></p>
+    </main>
+  </body>
+</html>
