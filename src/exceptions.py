@@ -17,6 +17,10 @@ class AppError(Exception):
         super().__init__(message)
         self.code, self.message, self.status_code = code, message, status_code
 
+    def __reduce__(self):
+        # Preserve the public error across AnyIO's process boundary, including subclasses.
+        return AppError, (self.code, self.message, self.status_code)
+
 
 class StorageFullError(AppError):
     def __init__(self):

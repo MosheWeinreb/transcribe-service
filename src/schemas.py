@@ -15,12 +15,6 @@ class JobStatus(StrEnum):
     FAILED = "failed"
 
 
-class TranscriptionMessage(BaseModel):
-    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
-
-    job_id: UUID
-
-
 class ErrorDetail(BaseModel):
     code: str
     message: str

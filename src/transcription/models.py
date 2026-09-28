@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, Double, Index, Text, false, func, text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, Double, Index, Text, func, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -17,7 +17,7 @@ class Job(Base):
             name="jobs_status_check",
         ),
         CheckConstraint("upload_bytes >= 0", name="jobs_upload_bytes_check"),
-        Index("jobs_dispatch_idx", "available_at", postgresql_where=text("status = 'queued'")),
+        Index("jobs_queue_idx", "available_at", postgresql_where=text("status = 'queued'")),
         Index(
             "jobs_deadline_idx",
             "deadline",
@@ -37,8 +37,6 @@ class Job(Base):
     available_at: Mapped[datetime] = mapped_column(server_default=func.now())
     finished_at: Mapped[datetime | None]
     deadline: Mapped[datetime | None]
-    dispatch_pending: Mapped[bool] = mapped_column(server_default=false())
-    published_at: Mapped[datetime | None]
     attempts: Mapped[int] = mapped_column(server_default="0")
     attempt_id: Mapped[UUID | None]
     transcript: Mapped[str | None]

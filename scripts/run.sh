@@ -15,8 +15,8 @@ if [ ! -e .env ]; then
     printf '%s\n' 'Created .env from .env.example.'
 fi
 docker compose build api
-docker compose up -d --wait
-api_port=$(docker compose exec -T api python -c 'from src.settings.config import get_settings; print(get_settings().server_port)')
+docker compose up -d --wait --remove-orphans
+api_port=$(docker compose exec -T api python -c 'from src.settings.config import settings; print(settings.server_port)')
 address=$(docker compose port api "$api_port")
 address=$(printf '%s\n' "$address" | head -n 1)
 printf 'App: http://%s\nAPI docs: http://%s/docs\n' "$address" "$address"

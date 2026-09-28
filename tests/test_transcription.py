@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.exceptions import AppError
-from src.settings.config import get_settings
+from src.settings.config import settings
 from src.transcription.media import decode_audio
 
 
@@ -17,7 +17,7 @@ class DecoderTests(unittest.TestCase):
             source = Path(directory) / "silent.mp4"
             subprocess.run(
                 [
-                    get_settings().ffmpeg_binary,
+                    settings.ffmpeg_binary,
                     "-nostdin",
                     "-v",
                     "error",

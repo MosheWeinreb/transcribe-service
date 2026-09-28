@@ -1,4 +1,3 @@
-from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal, Self
 
@@ -13,7 +12,6 @@ class Settings(BaseSettings):
     server_port: int = Field(8000, ge=1, le=65535)
 
     database_url: str = "postgresql://transcriber:local-development@localhost:5432/transcriber"
-    broker_url: str = "amqp://transcriber:local-development@localhost:5672//"
     db_pool_size: PositiveInt = 5
     db_timeout_seconds: PositiveInt = 10
 
@@ -40,7 +38,6 @@ class Settings(BaseSettings):
     task_timeout_seconds: PositiveInt = 900
     recovery_grace_seconds: PositiveInt = 30
     max_queue_wait_seconds: PositiveInt = 3600
-    redispatch_seconds: PositiveInt = 300
     max_attempts: int = Field(3, ge=1, le=10)
     retry_backoff_seconds: PositiveInt = 10
     retry_http_statuses: tuple[Annotated[int, Field(ge=400, le=599)], ...] = (
@@ -51,15 +48,11 @@ class Settings(BaseSettings):
         504,
     )
     retention_seconds: PositiveInt = 86400
-    maintenance_interval_seconds: PositiveInt = 5
-    maintenance_batch_size: PositiveInt = 20
+    cleanup_interval_seconds: PositiveInt = 30
+    worker_poll_seconds: float = Field(1.0, gt=0)
+    cleanup_batch_size: PositiveInt = 20
 
     worker_concurrency: PositiveInt = 1
-    worker_prefetch: PositiveInt = 1
-    queue_name: str = "transcriptions"
-    queue_max_length: PositiveInt = 100
-    broker_timeout_seconds: PositiveInt = 5
-    broker_heartbeat_seconds: PositiveInt = 30
 
     poll_interval_ms: int = Field(2000, ge=500)
     recording_margin_ms: NonNegativeInt = 500
@@ -78,11 +71,7 @@ class Settings(BaseSettings):
             raise ValueError("DECODE_TIMEOUT_SECONDS must be smaller than TASK_TIMEOUT_SECONDS")
         if self.max_concurrent_uploads > self.max_active_jobs:
             raise ValueError("MAX_CONCURRENT_UPLOADS must not exceed MAX_ACTIVE_JOBS")
-        if self.redispatch_seconds <= self.broker_timeout_seconds:
-            raise ValueError("REDISPATCH_SECONDS must exceed BROKER_TIMEOUT_SECONDS")
         return self
 
 
-@lru_cache
-def get_settings() -> Settings:
-    return Settings()
+settings = Settings()

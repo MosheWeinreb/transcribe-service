@@ -13,7 +13,7 @@ async def live() -> LivenessResponse:
 
 
 @router.get("/ready")
-def ready() -> ReadinessResponse:
-    check_database()
-    check_disk_space()
+async def ready() -> ReadinessResponse:
+    await check_database()
+    await check_disk_space()
     return ReadinessResponse()

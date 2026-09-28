@@ -3,10 +3,9 @@ name: transcribe-service
 x-app: &app
   build: .
   image: transcribe-service:local
-  env_file: .env
+  env_file: ${ENV_FILE:-.env}
   environment:
     DATABASE_URL: postgresql://${POSTGRES_USER:-transcriber}:${POSTGRES_PASSWORD:-local-development}@db:5432/${POSTGRES_DB:-transcriber}
-    BROKER_URL: amqp://${RABBITMQ_USER:-transcriber}:${RABBITMQ_PASSWORD:-local-development}@rabbitmq:5672//
     MEDIA_DIR: /data
     MODEL_CACHE_DIR: /models
     SERVER_HOST: 0.0.0.0
@@ -32,20 +31,6 @@ services:
       retries: 12
     restart: unless-stopped
 
-  rabbitmq:
-    image: rabbitmq:4-alpine@sha256:2531fe16e1cb4ec4086d3eaa63118c8f074dd98620d55f022f453a397b18f037
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-transcriber}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-local-development}
-    ports: ["127.0.0.1:${BROKER_PORT:-5673}:5672"]
-    volumes: ["rabbitmq:/var/lib/rabbitmq"]
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-    restart: unless-stopped
-
   schema:
     <<: *app
     command: ["python", "-m", "src.database"]
@@ -57,7 +42,9 @@ services:
     <<: *app
     command: ["python", "main.py"]
     ports: ["127.0.0.1:${APP_PORT:-8000}:${SERVER_PORT:-8000}"]
-    mem_limit: ${API_MEMORY_LIMIT:-512m}
+    mem_limit: ${API_MEMORY_LIMIT:-4g}
+    cpus: ${API_CPU_LIMIT:-4}
+    stop_grace_period: 30s
     depends_on:
       schema: { condition: service_completed_successfully }
     healthcheck:
@@ -66,41 +53,13 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; from src.settings.config import get_settings; urllib.request.urlopen(f'http://127.0.0.1:{get_settings().server_port}/health/ready')",
+          "import urllib.request; from src.settings.config import settings; urllib.request.urlopen(f'http://127.0.0.1:{settings.server_port}/health/ready')",
         ]
       interval: 15s
       timeout: 5s
       retries: 3
 
-  worker:
-    <<: *app
-    command:
-      [
-        "celery",
-        "-A",
-        "src.settings.celery_app:celery_app",
-        "worker",
-        "--loglevel=${LOG_LEVEL:-INFO}",
-        "--without-mingle",
-        "--without-gossip",
-      ]
-    mem_limit: ${WORKER_MEMORY_LIMIT:-4g}
-    cpus: ${WORKER_CPU_LIMIT:-4}
-    stop_grace_period: ${WORKER_STOP_GRACE:-930s}
-    depends_on:
-      schema: { condition: service_completed_successfully }
-      rabbitmq: { condition: service_healthy }
-
-  maintenance:
-    <<: *app
-    command: ["python", "-m", "src.transcription.maintenance"]
-    mem_limit: ${MAINTENANCE_MEMORY_LIMIT:-256m}
-    depends_on:
-      schema: { condition: service_completed_successfully }
-      rabbitmq: { condition: service_healthy }
-
 volumes:
   postgres:
-  rabbitmq:
   media:
   models:

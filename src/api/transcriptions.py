@@ -5,11 +5,10 @@ from uuid import UUID
 
 import anyio
 from fastapi import APIRouter, Header, Query, Request, Response
-from starlette.concurrency import run_in_threadpool
 
 from src.exceptions import AppError
 from src.schemas import ErrorDetail, ErrorResponse, JobAccepted, JobResult, PublicConfig
-from src.settings.config import get_settings
+from src.settings.config import settings
 from src.storage import check_upload_size, remove_media, save_upload, storage_errors
 from src.transcription import service
 
@@ -38,26 +37,25 @@ async def upload_job(
     content_length: Annotated[int | None, Header(ge=0)] = None,
 ) -> JobAccepted:
     """Stream a binary file body. Do not wrap it in multipart/form-data."""
-    settings = get_settings()
     if request.headers.get("content-type", "").startswith("multipart/"):
         raise AppError("invalid_content_type", "Send the file as the binary request body.", 415)
     if content_length is not None:
         check_upload_size(content_length, settings.max_upload_bytes)
-    job_id = await run_in_threadpool(service.reserve_upload, filename)
+    job_id = await service.reserve_upload(filename)
     finalized_file = False
     try:
         with storage_errors():
             async with asyncio.timeout(settings.upload_timeout_seconds):
                 size = await save_upload(job_id, request.stream())
                 finalized_file = True
-                await run_in_threadpool(service.finalize_upload, job_id, size)
+                await service.finalize_upload(job_id, size)
     except BaseException as exc:
         # Shield cleanup from a client disconnect or request cancellation.
         # Once the file is committed, leave it for recovery if the database outcome is uncertain.
         with anyio.CancelScope(shield=True):
             if not finalized_file:
-                await run_in_threadpool(remove_media, job_id)
-                await run_in_threadpool(service.abandon_upload, job_id)
+                await remove_media(job_id)
+                await service.abandon_upload(job_id)
         if isinstance(exc, TimeoutError):
             raise AppError(
                 "upload_timeout", "The upload took too long. Please try again.", 408
@@ -65,17 +63,13 @@ async def upload_job(
         raise
     accepted = JobAccepted(id=job_id, status_url=f"/api/jobs/{job_id}")
     response.headers["Location"] = accepted.status_url
-    await run_in_threadpool(
-        log.info,
-        "upload_accepted",
-        extra={"job_id": str(job_id)},
-    )
+    log.info("upload_accepted", extra={"job_id": str(job_id)})
     return accepted
 
 
 @router.get("/jobs/{job_id}")
-def read_job(job_id: UUID) -> JobResult:
-    job = service.get_job(job_id)
+async def read_job(job_id: UUID) -> JobResult:
+    job = await service.get_job(job_id)
     result = JobResult.model_validate(job)
     if job.error_code:
         result.error = ErrorDetail(
@@ -84,10 +78,8 @@ def read_job(job_id: UUID) -> JobResult:
     return result
 
 
-# hmmmmmm added since i saw it somewhere in docs of fastapi
 @router.get("/config")
-def public_config() -> PublicConfig:
-    settings = get_settings()
+async def public_config() -> PublicConfig:
     return PublicConfig(
         max_upload_bytes=settings.max_upload_bytes,
         max_filename_length=settings.max_filename_length,

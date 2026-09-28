@@ -7,14 +7,13 @@ import numpy as np
 from ffmpegio.errors import FFmpegError
 
 from src.exceptions import AppError
-from src.settings.config import get_settings
+from src.settings.config import settings
 
 # Whisper's audio input contract, not a deployment tuning value.
 SAMPLE_RATE = 16000
 
 
 def decode_audio(source: Path) -> np.ndarray:
-    settings = get_settings()
     max_samples = settings.max_duration_seconds * SAMPLE_RATE
     try:
         # Decode one extra sample to detect over-limit media without trusting container metadata.

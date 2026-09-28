@@ -20,7 +20,7 @@ def configure_logging(level: str) -> None:
         )
     )
     logging.basicConfig(level=level, handlers=[handler], force=True)
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "celery"):
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         logger = logging.getLogger(name)
         logger.handlers.clear()
         logger.propagate = True

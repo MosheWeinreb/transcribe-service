@@ -6,13 +6,14 @@ import shutil
 import sys
 from collections.abc import AsyncIterable
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
 import anyio
 
 from src.exceptions import AppError, StorageFullError
-from src.settings.config import get_settings
+from src.settings.config import settings
 
 
 @contextmanager
@@ -27,17 +28,15 @@ def storage_errors():
 
 
 def media_path(job_id: UUID | str, suffix: str = ".media") -> Path:
-    return get_settings().media_dir / f"{UUID(str(job_id))}{suffix}"
+    return settings.media_dir / f"{UUID(str(job_id))}{suffix}"
 
 
-def prepare_storage() -> None:
-    settings = get_settings()
-    settings.media_dir.mkdir(parents=True, exist_ok=True)
+async def prepare_storage() -> None:
+    await anyio.Path(settings.media_dir).mkdir(parents=True, exist_ok=True)
 
 
-def check_disk_space(reserved_uploads: int = 1) -> None:
-    settings = get_settings()
-    if shutil.disk_usage(settings.media_dir).free < (
+async def check_disk_space(reserved_uploads: int = 1) -> None:
+    if (await anyio.to_thread.run_sync(shutil.disk_usage, settings.media_dir)).free < (
         settings.min_free_disk_bytes + settings.max_upload_bytes * reserved_uploads
     ):
         raise StorageFullError()
@@ -50,7 +49,7 @@ def check_upload_size(size: int, limit: int) -> None:
 
 async def save_upload(job_id: UUID, chunks: AsyncIterable[bytes]) -> int:
     """Save and commit a bounded stream; the caller owns timeout and failure cleanup."""
-    limit = get_settings().max_upload_bytes
+    limit = settings.max_upload_bytes
     size = 0
     stream = await anyio.open_file(media_path(job_id, ".part"), "xb")
     try:
@@ -82,6 +81,25 @@ def commit_file(job_id: UUID) -> None:
             os.close(descriptor)
 
 
-def remove_media(job_id: UUID | str) -> None:
-    media_path(job_id).unlink(missing_ok=True)
-    media_path(job_id, ".part").unlink(missing_ok=True)
+async def remove_media(job_id: UUID | str) -> None:
+    await anyio.Path(media_path(job_id)).unlink(missing_ok=True)
+    await anyio.Path(media_path(job_id, ".part")).unlink(missing_ok=True)
+
+
+async def remove_orphans(known_ids: set[str]) -> None:
+    cutoff = datetime.now(UTC).timestamp() - (
+        max(settings.upload_timeout_seconds, settings.task_timeout_seconds)
+        + settings.recovery_grace_seconds
+    )
+    # ponytail: scan bounded single-host storage; use object lifecycle rules at scale.
+    async for path in anyio.Path(settings.media_dir).iterdir():
+        if path.suffix not in {".part", ".media", ".pcm"}:
+            continue
+        try:
+            job_id = str(UUID(path.name.split(".")[0]))
+            if (await path.stat()).st_mtime < cutoff and (
+                path.suffix == ".pcm" or job_id not in known_ids
+            ):
+                await path.unlink(missing_ok=True)
+        except (ValueError, FileNotFoundError):
+            continue

@@ -22,8 +22,8 @@ try {
         Write-Host "Created .env from .env.example."
     }
     Invoke-Docker compose build api
-    Invoke-Docker compose up -d --wait
-    $apiPort = Invoke-Docker compose exec -T api python -c "from src.settings.config import get_settings; print(get_settings().server_port)"
+    Invoke-Docker compose up -d --wait --remove-orphans
+    $apiPort = Invoke-Docker compose exec -T api python -c "from src.settings.config import settings; print(settings.server_port)"
     $address = Invoke-Docker compose port api $apiPort
     Write-Host "App: http://$address"
     Write-Host "API docs: http://$address/docs"
